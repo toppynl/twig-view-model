@@ -6,7 +6,9 @@ namespace Toppy\TwigViewModel\Twig\Runtime;
 
 use Toppy\AsyncViewModel\AsyncViewModel;
 use Toppy\AsyncViewModel\Exception\NoDataException;
+use Toppy\AsyncViewModel\Exception\ViewModelNotPreloadedException;
 use Toppy\AsyncViewModel\ViewModelManagerInterface;
+use Toppy\TwigViewModel\ViewModelError;
 use Twig\Extension\RuntimeExtensionInterface;
 
 final class ViewModelRuntime implements RuntimeExtensionInterface
@@ -16,26 +18,30 @@ final class ViewModelRuntime implements RuntimeExtensionInterface
     ) {}
 
     /**
-     * Get view model data, returning null if no data exists.
+     * Get view model data with error handling.
      *
-     * Force-resolves the Future immediately since Twig templates
-     * use the data right away. Catches NoDataException and returns
-     * null for template-level handling.
+     * Returns indexed array [data, error] for template sequence destructuring:
+     *   {% do [product, error] = view('App\\ViewModel\\Product') %}
      *
      * @template T of object
      * @param array<string, mixed> $context Twig context (unused)
      * @param class-string<AsyncViewModel<T>> $class
-     * @return T|null
+     * @return array{0: T|null, 1: ViewModelError|null}
      */
-    public function view(array $context, string $class): ?object
+    public function view(array $context, string $class): array
     {
         try {
             $future = $this->manager->preloadWithFuture($class);
-            return $future->await();
+            $data = $future->await();
+
+            return [$data, null];
         } catch (NoDataException) {
-            return null;
+            return [null, null];
+        } catch (ViewModelNotPreloadedException $e) {
+            // Developer bug - rethrow to surface the error
+            throw $e;
+        } catch (\Throwable $e) {
+            return [null, ViewModelError::fromException($e)];
         }
-        // ViewModelNotPreloadedException bubbles up (developer bug)
-        // ViewModelResolutionException bubbles up (runtime error)
     }
 }

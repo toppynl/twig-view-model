@@ -11,10 +11,11 @@ use Toppy\AsyncViewModel\Exception\ViewModelNotPreloadedException;
 use Toppy\AsyncViewModel\Exception\ViewModelResolutionException;
 use Toppy\AsyncViewModel\ViewModelManagerInterface;
 use Toppy\TwigViewModel\Twig\Runtime\ViewModelRuntime;
+use Toppy\TwigViewModel\ViewModelError;
 
 final class ViewModelRuntimeTest extends TestCase
 {
-    public function testViewReturnsDataWhenResolved(): void
+    public function testViewReturnsDataAndNullError(): void
     {
         $data = new \stdClass();
         $data->value = 'test';
@@ -27,10 +28,13 @@ final class ViewModelRuntimeTest extends TestCase
 
         $result = $runtime->view([], 'App\\ViewModel\\Test');
 
-        $this->assertSame($data, $result);
+        $this->assertIsArray($result);
+        $this->assertCount(2, $result);
+        $this->assertSame($data, $result[0]);
+        $this->assertNull($result[1]);
     }
 
-    public function testViewReturnsNullOnNoDataException(): void
+    public function testViewReturnsNullDataAndNullErrorOnNoDataException(): void
     {
         $manager = $this->createMock(ViewModelManagerInterface::class);
         $manager->method('preloadWithFuture')
@@ -40,7 +44,27 @@ final class ViewModelRuntimeTest extends TestCase
 
         $result = $runtime->view([], 'App\\ViewModel\\Test');
 
-        $this->assertNull($result);
+        $this->assertNull($result[0]);
+        $this->assertNull($result[1]);
+    }
+
+    public function testViewReturnsNullDataAndErrorOnResolutionException(): void
+    {
+        $manager = $this->createMock(ViewModelManagerInterface::class);
+        $manager->method('preloadWithFuture')
+            ->willReturn(Future::error(new ViewModelResolutionException(
+                viewModelClass: 'App\\ViewModel\\Test',
+                message: 'API timeout',
+            )));
+
+        $runtime = new ViewModelRuntime($manager);
+
+        $result = $runtime->view([], 'App\\ViewModel\\Test');
+
+        $this->assertNull($result[0]);
+        $this->assertInstanceOf(ViewModelError::class, $result[1]);
+        $this->assertSame('RESOLUTION_FAILED', $result[1]->code);
+        $this->assertSame('API timeout', $result[1]->message);
     }
 
     public function testViewRethrowsViewModelNotPreloadedException(): void
@@ -56,20 +80,18 @@ final class ViewModelRuntimeTest extends TestCase
         $runtime->view([], 'App\\ViewModel\\Test');
     }
 
-    public function testViewRethrowsViewModelResolutionException(): void
+    public function testViewReturnsErrorForGenericException(): void
     {
         $manager = $this->createMock(ViewModelManagerInterface::class);
         $manager->method('preloadWithFuture')
-            ->willReturn(Future::error(new ViewModelResolutionException(
-                viewModelClass: 'App\\ViewModel\\Test',
-                message: 'API timeout',
-            )));
+            ->willReturn(Future::error(new \RuntimeException('Something broke')));
 
         $runtime = new ViewModelRuntime($manager);
 
-        $this->expectException(ViewModelResolutionException::class);
-        $this->expectExceptionMessage('API timeout');
+        $result = $runtime->view([], 'App\\ViewModel\\Test');
 
-        $runtime->view([], 'App\\ViewModel\\Test');
+        $this->assertNull($result[0]);
+        $this->assertInstanceOf(ViewModelError::class, $result[1]);
+        $this->assertSame('UNKNOWN', $result[1]->code);
     }
 }
