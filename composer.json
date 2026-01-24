@@ -15,7 +15,7 @@
   },
   "require": {
     "php": ">=8.4",
-    "toppy/async-view-model": "^2.6",
+    "toppy/async-view-model": "^0.4",
     "twig/twig": "^3.23"
   },
   "require-dev": {
