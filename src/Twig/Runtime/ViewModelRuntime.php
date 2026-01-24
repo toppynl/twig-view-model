@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Toppy\TwigViewModel\Twig\Runtime;
 
 use Toppy\AsyncViewModel\AsyncViewModel;
+use Toppy\AsyncViewModel\Exception\NoDataException;
 use Toppy\AsyncViewModel\ViewModelManagerInterface;
 use Twig\Extension\RuntimeExtensionInterface;
 
@@ -15,18 +16,26 @@ final class ViewModelRuntime implements RuntimeExtensionInterface
     ) {}
 
     /**
-     * Get view model data (blocks if not yet resolved).
+     * Get view model data, returning null if no data exists.
      *
-     * Returns the typed Data class for the given ViewModel.
-     * IDE autocomplete works via PHPDoc generics.
+     * Force-resolves the Future immediately since Twig templates
+     * use the data right away. Catches NoDataException and returns
+     * null for template-level handling.
      *
      * @template T of object
      * @param array<string, mixed> $context Twig context (unused)
      * @param class-string<AsyncViewModel<T>> $class
-     * @return T
+     * @return T|null
      */
-    public function view(array $context, string $class): object
+    public function view(array $context, string $class): ?object
     {
-        return $this->manager->get($class);
+        try {
+            $future = $this->manager->preloadWithFuture($class);
+            return $future->await();
+        } catch (NoDataException) {
+            return null;
+        }
+        // ViewModelNotPreloadedException bubbles up (developer bug)
+        // ViewModelResolutionException bubbles up (runtime error)
     }
 }
