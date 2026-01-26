@@ -16,6 +16,7 @@ final class ViewExtension extends AbstractExtension
         private readonly LoaderInterface $loader,
     ) {}
 
+    #[\Override]
     public function getFunctions(): array
     {
         return [
@@ -23,6 +24,7 @@ final class ViewExtension extends AbstractExtension
         ];
     }
 
+    #[\Override]
     public function getNodeVisitors(): array
     {
         return [

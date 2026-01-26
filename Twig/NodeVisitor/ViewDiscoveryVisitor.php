@@ -24,6 +24,7 @@ use Twig\NodeVisitor\NodeVisitorInterface;
  * 3. Recursively scans static includes
  * 4. Injects a DoPreloadMethodNode into ModuleNode's class_end slot
  */
+// @mago-ignore analysis:mixed-assignment - Twig Node::getAttribute() returns mixed; vendor limitation
 final class ViewDiscoveryVisitor implements NodeVisitorInterface
 {
     /** @var array<string, true> */
@@ -36,6 +37,10 @@ final class ViewDiscoveryVisitor implements NodeVisitorInterface
         private readonly LoaderInterface $loader,
     ) {}
 
+    /**
+     * @throws \Twig\Error\SyntaxError When view model class doesn't exist or doesn't implement AsyncViewModel
+     */
+    #[\Override]
     public function enterNode(Node $node, Environment $env): Node
     {
         // Track which template we're in to prevent circular includes
@@ -65,7 +70,7 @@ final class ViewDiscoveryVisitor implements NodeVisitorInterface
                         }
 
                         // Compile-time validation: must implement interface
-                        if (!is_a($className, \Toppy\AsyncViewModel\AsyncViewModel::class, true)) {
+                        if (!is_a($className, \Toppy\AsyncViewModel\AsyncViewModel::class, allow_string: true)) {
                             throw new \Twig\Error\SyntaxError(
                                 sprintf('Class "%s" must implement AsyncViewModel.', $className),
                                 $node->getTemplateLine(),
@@ -73,7 +78,7 @@ final class ViewDiscoveryVisitor implements NodeVisitorInterface
                             );
                         }
 
-                        if (!in_array($className, $this->discoveredViewModels, true)) {
+                        if (!in_array($className, $this->discoveredViewModels, strict: true)) {
                             $this->discoveredViewModels[] = $className;
                         }
                     }
@@ -89,6 +94,7 @@ final class ViewDiscoveryVisitor implements NodeVisitorInterface
         return $node;
     }
 
+    #[\Override]
     public function leaveNode(Node $node, Environment $env): ?Node
     {
         // At the end of the module, inject the DoPreloadMethodNode
@@ -97,7 +103,7 @@ final class ViewDiscoveryVisitor implements NodeVisitorInterface
             $node->setAttribute('discovered_view_models', $this->discoveredViewModels);
 
             // Only inject if we found view models
-            if (!empty($this->discoveredViewModels)) {
+            if ($this->discoveredViewModels !== []) {
                 // Create the method node
                 $methodNode = new DoPreloadMethodNode($this->discoveredViewModels);
 
@@ -114,6 +120,7 @@ final class ViewDiscoveryVisitor implements NodeVisitorInterface
         return $node;
     }
 
+    #[\Override]
     public function getPriority(): int
     {
         // Run after standard visitors but before optimizer
@@ -147,14 +154,18 @@ final class ViewDiscoveryVisitor implements NodeVisitorInterface
             $childModule = $env->parse($stream);
 
             // Merge discovered view models from child
-            $childViewModels = $childModule->getAttribute('discovered_view_models') ?? [];
-            foreach ($childViewModels as $className) {
-                if (!in_array($className, $this->discoveredViewModels, true)) {
-                    $this->discoveredViewModels[] = $className;
+            $childViewModels = $childModule->getAttribute('discovered_view_models');
+            if (is_array($childViewModels)) {
+                foreach ($childViewModels as $className) {
+                    if (is_string($className) && !in_array($className, $this->discoveredViewModels, strict: true)) {
+                        $this->discoveredViewModels[] = $className;
+                    }
                 }
             }
+
+            // @mago-ignore lint:no-empty-catch-clause - Intentionally swallowed: child template
+            // doesn't exist or has compile errors - graceful degradation allows parent to render
         } catch (\Throwable) {
-            // Template doesn't exist or has errors - skip
         }
     }
 }

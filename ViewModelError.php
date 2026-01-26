@@ -9,6 +9,7 @@ namespace Toppy\TwigViewModel;
  *
  * Provides structured error information with codes for template-level handling.
  */
+// @mago-ignore analysis:mixed-assignment - Symfony HttpException::getHeaders() returns array<string, mixed>; vendor limitation
 final class ViewModelError implements \JsonSerializable
 {
     public function __construct(
@@ -26,7 +27,8 @@ final class ViewModelError implements \JsonSerializable
             $e instanceof \Symfony\Component\HttpKernel\Exception\NotFoundHttpException => 'NOT_FOUND',
             $e instanceof \Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException => 'FORBIDDEN',
             $e instanceof \Symfony\Component\HttpKernel\Exception\UnauthorizedHttpException => 'UNAUTHORIZED',
-            $e instanceof \Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException => 'SERVICE_UNAVAILABLE',
+            $e instanceof \Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException
+                => 'SERVICE_UNAVAILABLE',
             $e instanceof \Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException => 'RATE_LIMITED',
             $e instanceof \Symfony\Component\HttpClient\Exception\TimeoutException => 'TIMEOUT',
             $e instanceof \Toppy\AsyncViewModel\Exception\ViewModelResolutionException => 'RESOLUTION_FAILED',
@@ -35,19 +37,17 @@ final class ViewModelError implements \JsonSerializable
 
         $context = null;
         if ($e instanceof \Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException) {
-            $retryAfter = $e->getHeaders()['Retry-After'] ?? null;
-            if ($retryAfter !== null) {
+            $headers = $e->getHeaders();
+            $retryAfter = $headers['Retry-After'] ?? null;
+            if (is_string($retryAfter) || is_int($retryAfter)) {
                 $context = ['retryAfter' => (int) $retryAfter];
             }
         }
 
-        return new self(
-            code: $code,
-            message: $e->getMessage(),
-            context: $context,
-        );
+        return new self(code: $code, message: $e->getMessage(), context: $context);
     }
 
+    #[\Override]
     public function jsonSerialize(): array
     {
         return [

@@ -32,8 +32,13 @@ final class DoPreloadMethodNode extends Node
         parent::__construct([], ['classes' => $viewModelClasses], $lineno);
     }
 
+    /**
+     * @throws \LogicException When the 'classes' attribute is not set
+     */
+    #[\Override]
     public function compile(Compiler $compiler): void
     {
+        /** @var list<string> $classes */
         $classes = $this->getAttribute('classes');
 
         $compiler
