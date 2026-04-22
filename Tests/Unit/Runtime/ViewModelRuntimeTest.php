@@ -11,6 +11,7 @@ use Toppy\AsyncViewModel\Exception\ViewModelResolutionException;
 use Toppy\AsyncViewModel\ViewModelManagerInterface;
 use Toppy\TwigViewModel\Twig\Runtime\ViewModelRuntime;
 use Toppy\TwigViewModel\ViewModelError;
+use Toppy\TwigViewModel\ViewModelResult;
 
 /** Tests for ViewModelRuntime */
 final class ViewModelRuntimeTest extends TestCase
@@ -29,9 +30,9 @@ final class ViewModelRuntimeTest extends TestCase
         $class = 'App\\ViewModel\\Test';
         $result = $runtime->view([], $class);
 
-        static::assertCount(2, $result);
-        static::assertSame($data, $result[0]);
-        static::assertNull($result[1]);
+        static::assertInstanceOf(ViewModelResult::class, $result);
+        static::assertSame($data, $result->data);
+        static::assertNull($result->error);
     }
 
     public function testViewReturnsNullDataAndNullErrorOnNoDataException(): void
@@ -45,8 +46,8 @@ final class ViewModelRuntimeTest extends TestCase
         $class = 'App\\ViewModel\\Test';
         $result = $runtime->view([], $class);
 
-        static::assertNull($result[0]);
-        static::assertNull($result[1]);
+        static::assertNull($result->data);
+        static::assertNull($result->error);
     }
 
     public function testViewReturnsNullDataAndErrorOnResolutionException(): void
@@ -65,10 +66,10 @@ final class ViewModelRuntimeTest extends TestCase
         $class = 'App\\ViewModel\\Test';
         $result = $runtime->view([], $class);
 
-        static::assertNull($result[0]);
-        static::assertInstanceOf(ViewModelError::class, $result[1]);
-        static::assertSame('RESOLUTION_FAILED', $result[1]->code);
-        static::assertSame('API timeout', $result[1]->message);
+        static::assertNull($result->data);
+        static::assertInstanceOf(ViewModelError::class, $result->error);
+        static::assertSame('RESOLUTION_FAILED', $result->error->code);
+        static::assertSame('API timeout', $result->error->message);
     }
 
     public function testViewRethrowsViewModelNotPreloadedException(): void
@@ -96,8 +97,8 @@ final class ViewModelRuntimeTest extends TestCase
         $class = 'App\\ViewModel\\Test';
         $result = $runtime->view([], $class);
 
-        static::assertNull($result[0]);
-        static::assertInstanceOf(ViewModelError::class, $result[1]);
-        static::assertSame('UNKNOWN', $result[1]->code);
+        static::assertNull($result->data);
+        static::assertInstanceOf(ViewModelError::class, $result->error);
+        static::assertSame('UNKNOWN', $result->error->code);
     }
 }

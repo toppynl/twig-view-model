@@ -9,6 +9,7 @@ use Toppy\AsyncViewModel\Exception\NoDataException;
 use Toppy\AsyncViewModel\Exception\ViewModelNotPreloadedException;
 use Toppy\AsyncViewModel\ViewModelManagerInterface;
 use Toppy\TwigViewModel\ViewModelError;
+use Toppy\TwigViewModel\ViewModelResult;
 use Twig\Extension\RuntimeExtensionInterface;
 
 final class ViewModelRuntime implements RuntimeExtensionInterface
@@ -20,29 +21,28 @@ final class ViewModelRuntime implements RuntimeExtensionInterface
     /**
      * Get view model data with error handling.
      *
-     * Returns indexed array [data, error] for template sequence destructuring:
-     *   {% do [product, error] = view('App\\ViewModel\\Product') %}
+     * Returns ViewModelResult for object destructuring with renaming:
+     *   {% do {data: product, error: productError} = view('App\\ViewModel\\Product') %}
      *
      * @param array<string, mixed> $context Twig context (unused)
      * @param class-string<AsyncViewModel<object>> $class
-     * @return array{0: object|null, 1: ViewModelError|null}
      *
      * @throws ViewModelNotPreloadedException When view model was not pre-loaded (developer bug)
      */
     // @mago-ignore analysis:possibly-invalid-argument - Generic type variance issue; $class is validated at runtime
-    public function view(array $context, string $class): array
+    public function view(array $context, string $class): ViewModelResult
     {
         try {
             $data = $this->manager->get($class);
 
-            return [$data, null];
+            return new ViewModelResult($data, null);
         } catch (NoDataException) {
-            return [null, null];
+            return new ViewModelResult(null, null);
         } catch (ViewModelNotPreloadedException $e) {
             // Developer bug - rethrow to surface the error
             throw $e;
         } catch (\Throwable $e) {
-            return [null, ViewModelError::fromException($e)];
+            return new ViewModelResult(null, ViewModelError::fromException($e));
         }
     }
 }
