@@ -35,6 +35,16 @@ final class ViewModelRuntime implements RuntimeExtensionInterface
         try {
             $data = $this->manager->get($class);
 
+            // The non-decorated manager returns an UNINITIALIZED lazy proxy:
+            // truthy, with resolution failures only thrown on first property
+            // access inside the template — escaping these catches and breaking
+            // the {data, error} contract. Initialize it here so failures take
+            // the documented path.
+            $reflector = new \ReflectionClass($data);
+            if ($reflector->isUninitializedLazyObject($data)) {
+                $reflector->initializeLazyObject($data);
+            }
+
             return new ViewModelResult($data, null);
         } catch (NoDataException) {
             return new ViewModelResult(null, null);
@@ -42,7 +52,25 @@ final class ViewModelRuntime implements RuntimeExtensionInterface
             // Developer bug - rethrow to surface the error
             throw $e;
         } catch (\Throwable $e) {
+            // The lazy proxy initializer wraps every failure (including
+            // NoDataException) in a ViewModelResolutionException; unwrap so
+            // "no data" still degrades gracefully instead of reporting an error.
+            if ($this->causedByNoData($e)) {
+                return new ViewModelResult(null, null);
+            }
+
             return new ViewModelResult(null, ViewModelError::fromException($e));
         }
+    }
+
+    private function causedByNoData(\Throwable $e): bool
+    {
+        for ($cause = $e; $cause !== null; $cause = $cause->getPrevious()) {
+            if ($cause instanceof NoDataException) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
